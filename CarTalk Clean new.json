@@ -1,0 +1,396 @@
+{
+  "name": "CarTalk Clean",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -1760,
+        80
+      ],
+      "id": "165aefc0-6795-41cf-9643-4835808fb5e4",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://community.cartalk.com/c/repair-and-maintenance/6.json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1536,
+        80
+      ],
+      "id": "6958213e-7bbf-4312-9268-9dfe166dc223",
+      "name": "Get Forum"
+    },
+    {
+      "parameters": {
+        "jsCode": "const topics = $input.first().json.topic_list.topics;\nreturn topics\n  .filter(t => t.id !== 12)\n  .map(t => ({\n    json: {\n      topic_id: t.id,\n      url: `https://community.cartalk.com/t/${t.slug}/${t.id}`,\n      title: t.title\n    }\n  }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1328,
+        80
+      ],
+      "id": "3c33e1dd-9b6d-4872-bd35-247357cb2dee",
+      "name": "Parse Topics"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer gsk_XXXX"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You extract automotive data from car forum post titles. Return ONLY raw JSON, no markdown, no explanation, no extra text.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Analyze this car forum post title and classify it.\\n\\nTitle: {{ $json.title }}\\n\\nRules:\\n- intent: diagnostic_question for car problems, repair_success_story for fixed problems, shop_request for finding mechanic, shop_recommendation for recommending shop, other for rest\\n- Extract vehicle year, make, model if mentioned in title\\n- Extract DTC codes like P0300 if mentioned\\n- is_lead=true ONLY if specific shop name, mechanic name, phone, email, or website mentioned\\n- confidence=0.9 if contact info, 0.7 if shop name, 0.0 if no lead\\n\\nReturn ONLY this JSON:\\n{\\\"intent\\\":\\\"other\\\",\\\"vehicle_year\\\":null,\\\"make\\\":null,\\\"model\\\":null,\\\"engine\\\":null,\\\"dtc_codes\\\":[],\\\"symptoms\\\":[],\\\"is_lead\\\":false,\\\"lead_name\\\":null,\\\"lead_city\\\":null,\\\"lead_phone\\\":null,\\\"lead_email\\\":null,\\\"lead_website\\\":null,\\\"confidence\\\":0.0}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1104,
+        80
+      ],
+      "id": "5407c85c-9924-4799-8a26-0632aaebb620",
+      "name": "Groq AI",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const topic_id = $('Parse Topics').item.json.topic_id;\nconst url = $('Parse Topics').item.json.url;\nconst title = $('Parse Topics').item.json.title;\n\nlet intent = 'other';\nlet dtc_codes = [];\nlet symptoms = [];\nlet vehicle_json = {};\nlet is_lead = false;\nlet lead_name = null;\nlet lead_city = null;\nlet lead_phone = null;\nlet lead_email = null;\nlet lead_website = null;\nlet confidence = 0.0;\n\ntry {\n  const content = $json.choices[0].message.content;\n  const cleaned = content.replace(/```json|```/g, '').trim();\n  const ai = JSON.parse(cleaned);\n  intent = ai.intent ?? 'other';\n  dtc_codes = Array.isArray(ai.dtc_codes) ? ai.dtc_codes : [];\n  symptoms = Array.isArray(ai.symptoms) ? ai.symptoms : [];\n  vehicle_json = {\n    vehicle_year: ai.vehicle_year ?? null,\n    make: ai.make ?? null,\n    model: ai.model ?? null,\n    engine: ai.engine ?? null\n  };\n  is_lead = ai.is_lead ?? false;\n  lead_name = ai.lead_name ?? null;\n  lead_city = ai.lead_city ?? null;\n  lead_phone = ai.lead_phone ?? null;\n  lead_email = ai.lead_email ?? null;\n  lead_website = ai.lead_website ?? null;\n  confidence = ai.confidence ?? 0.0;\n} catch(e) {}\n\nreturn {\n  json: {\n    topic_id, url, title, intent,\n    dtc_codes, symptoms, vehicle_json,\n    is_lead, lead_name, lead_city,\n    lead_phone, lead_email, lead_website, confidence\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -880,
+        80
+      ],
+      "id": "f119c6ff-e7be-4738-8285-e97f56973006",
+      "name": "Combine Data"
+    },
+    {
+      "parameters": {
+        "tableId": "forum_topics",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "topic_id",
+              "fieldValue": "={{ $json.topic_id }}"
+            },
+            {
+              "fieldId": "url",
+              "fieldValue": "={{ $json.url }}"
+            },
+            {
+              "fieldId": "title",
+              "fieldValue": "={{ $json.title }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -656,
+        80
+      ],
+      "id": "83a49a29-af09-4f8f-b602-6cc29116a810",
+      "name": "Save Topic",
+      "credentials": {
+        "supabaseApi": {
+          "id": "6aDk82Qa48hY3PM1",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "issues",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "topic_id",
+              "fieldValue": "={{ $('Combine Data').item.json.topic_id }}"
+            },
+            {
+              "fieldId": "url",
+              "fieldValue": "={{ $('Combine Data').item.json.url }}"
+            },
+            {
+              "fieldId": "title",
+              "fieldValue": "={{ $('Combine Data').item.json.title }}"
+            },
+            {
+              "fieldId": "intent",
+              "fieldValue": "={{ $('Combine Data').item.json.intent }}"
+            },
+            {
+              "fieldId": "dtc_codes",
+              "fieldValue": "={{ JSON.stringify($('Combine Data').item.json.dtc_codes) }}\n"
+            },
+            {
+              "fieldId": "symptoms",
+              "fieldValue": "={{ JSON.stringify($('Combine Data').item.json.symptoms) }}"
+            },
+            {
+              "fieldId": "vehicle_json",
+              "fieldValue": "={{ JSON.stringify($('Combine Data').item.json.vehicle_json) }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        80
+      ],
+      "id": "28c210d2-8066-4426-9bce-5f035569c29f",
+      "name": "Save Issue",
+      "credentials": {
+        "supabaseApi": {
+          "id": "6aDk82Qa48hY3PM1",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.is_lead }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -224,
+        80
+      ],
+      "id": "c96447ad-ca97-4b6e-ab68-eadd72ec0a7f",
+      "name": "Is Lead?"
+    },
+    {
+      "parameters": {
+        "tableId": "leads",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "topic_id",
+              "fieldValue": "={{ $json.topic_id }}"
+            },
+            {
+              "fieldId": "url",
+              "fieldValue": "={{ $json.url }}"
+            },
+            {
+              "fieldId": "name",
+              "fieldValue": "={{ $json.lead_name }}"
+            },
+            {
+              "fieldId": "city",
+              "fieldValue": "={{ $json.lead_city }}"
+            },
+            {
+              "fieldId": "phone",
+              "fieldValue": "={{ $json.lead_phone }}"
+            },
+            {
+              "fieldId": "email",
+              "fieldValue": "={{ $json.lead_email }}"
+            },
+            {
+              "fieldId": "website",
+              "fieldValue": "={{ $json.lead_website }}"
+            },
+            {
+              "fieldId": "confidence",
+              "fieldValue": "={{ $json.confidence }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "7e01e61b-c437-4407-bb05-9ed8eddd18a7",
+      "name": "Save Lead",
+      "credentials": {
+        "supabaseApi": {
+          "id": "6aDk82Qa48hY3PM1",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        160
+      ],
+      "id": "9baa4da6-ca37-4397-bb3d-4d8cd8e6451e",
+      "name": "Skip"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Forum",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Forum": {
+      "main": [
+        [
+          {
+            "node": "Parse Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Topics": {
+      "main": [
+        [
+          {
+            "node": "Groq AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq AI": {
+      "main": [
+        [
+          {
+            "node": "Combine Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Data": {
+      "main": [
+        [
+          {
+            "node": "Save Topic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Topic": {
+      "main": [
+        [
+          {
+            "node": "Save Issue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Issue": {
+      "main": [
+        [
+          {
+            "node": "Is Lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Lead?": {
+      "main": [
+        [
+          {
+            "node": "Save Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "e6dabf20-8c74-46d0-8d22-bcca3dc3bd97",
+  "meta": {
+    "instanceId": "d8518d2d38915c09cef81ae6e02a228c86078f5aaa1a8c2764300549cc107ba4"
+  },
+  "id": "DdRgm3TkdPSFRvDb",
+  "tags": []
+}

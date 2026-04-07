@@ -1,0 +1,545 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "8677a7f5-14d7-49c1-ba37-784e8918370b",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://community.cartalk.com/c/repair-and-maintenance/6.json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "f12abb71-958d-4866-9e93-21bcd44f94fb",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const topics = $json.topic_list.topics;\n\nreturn topics.map(t => ({\n  json: {\n    topic_id: t.id,\n    url: `https://community.cartalk.com/t/${t.slug}/${t.id}`,\n    title: t.title\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "805907c5-052b-43bd-9b19-39bd11284412",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "=forum_topics",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "topic_id",
+              "keyValue": "={{ $json.topic_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        624,
+        0
+      ],
+      "id": "8a288c30-0757-439b-a4a2-ca6667297e3b",
+      "name": "Get a row",
+      "retryOnFail": false,
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "6aDk82Qa48hY3PM1",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e1c8ac13-a9ff-4363-a8b3-ba0d3ad5e04a",
+              "leftValue": "={{ $json.topic_id }}",
+              "rightValue": "={{ $json }} is empty",
+              "operator": {
+                "type": "boolean",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        800,
+        0
+      ],
+      "id": "a14cc4a1-2046-4cc2-bbc9-0122f0004a92",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $('HTTP Request2').first().json.choices[0].message.content;\nconst cleaned = raw.replace(/```json|```/g, '').trim();\nconst parsed = JSON.parse(cleaned);\n\nreturn [{\n  json: {\n    ...parsed,\n    topic_id: $('Code in JavaScript').first().json.topic_id,\n    url: $('Code in JavaScript').first().json.url,\n    title: $('Code in JavaScript').first().json.title,\n    raw_markdown: $('HTTP Request3').first().json.data.markdown\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1648,
+        -16
+      ],
+      "id": "bbde0655-efb9-47aa-bfa1-b0abffd5da44",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "tableId": "issues",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "topic_id",
+              "fieldValue": "={{ $json.topic_id }}"
+            },
+            {
+              "fieldId": "url",
+              "fieldValue": "={{ $json.url }}"
+            },
+            {
+              "fieldId": "title",
+              "fieldValue": "={{ $json.title }}"
+            },
+            {
+              "fieldId": "intent",
+              "fieldValue": "={{ $json.intent }}"
+            },
+            {
+              "fieldId": "dtc_codes",
+              "fieldValue": "={{ JSON.stringify($json.issue.dtc_codes) }}"
+            },
+            {
+              "fieldId": "symptoms",
+              "fieldValue": "={{ JSON.stringify($json.issue.symptoms) }}"
+            },
+            {
+              "fieldId": "vehicle_json",
+              "fieldValue": "={{ JSON.stringify($json.issue) }}"
+            },
+            {
+              "fieldId": "raw_markdown",
+              "fieldValue": "={{ $json.raw_markdown }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1840,
+        -16
+      ],
+      "id": "db66d066-1e33-4954-9fbb-91658c7c00d4",
+      "name": "Create a row1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "6aDk82Qa48hY3PM1",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "074ebfc3-2608-4493-b903-5a6d623edd79",
+              "leftValue": "={{ $json.lead.is_lead }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2032,
+        -16
+      ],
+      "id": "9fbdad62-8d33-4593-bbba-d2a6a64ecd4c",
+      "name": "If1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        928,
+        144
+      ],
+      "id": "11f49f20-963c-46de-bca0-29cf9fdd5258",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "tableId": "leads",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "topic_id",
+              "fieldValue": "={{ $json.topic_id }}"
+            },
+            {
+              "fieldId": "url",
+              "fieldValue": "={{ $json.url }}"
+            },
+            {
+              "fieldId": "name",
+              "fieldValue": "={{ $json.lead.name }}"
+            },
+            {
+              "fieldId": "city",
+              "fieldValue": "={{ $json.lead.city }}"
+            },
+            {
+              "fieldId": "region",
+              "fieldValue": "={{ $json.lead.region }}"
+            },
+            {
+              "fieldId": "phone",
+              "fieldValue": "={{ $json.lead.phone }}"
+            },
+            {
+              "fieldId": "email",
+              "fieldValue": "={{ $json.lead.email }}"
+            },
+            {
+              "fieldId": "website",
+              "fieldValue": "={{ $json.lead.website }}"
+            },
+            {
+              "fieldId": "confidence",
+              "fieldValue": "={{ $json.lead.confidence }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2256,
+        -32
+      ],
+      "id": "93c9f1f8-8db5-469b-8bb4-34bd6597da66",
+      "name": "Create a row2",
+      "credentials": {
+        "supabaseApi": {
+          "id": "6aDk82Qa48hY3PM1",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2176,
+        128
+      ],
+      "id": "9589caa7-20b8-473f-934f-4a06f1215308",
+      "name": "No Operation, do nothing1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer gsk_XXXX"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You extract automotive issues and possible leads from forum posts. Output ONLY valid JSON. Use null when unknown. Do not guess.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Analyze this post and return JSON only with intent, issue and lead fields.\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1472,
+        -16
+      ],
+      "id": "5d82f39e-4593-4e3a-9ff2-5ec33a12a494",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.firecrawl.dev/v1/scrape",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": " Authorization",
+              "value": "Bearer gsk_XXXX"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"{{ $json.url }}\",\n  \"formats\": [\"markdown\"],\n  \"onlyMainContent\": true\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1280,
+        -16
+      ],
+      "id": "d53e5f59-a865-4ff8-b072-47f1dcda3110",
+      "name": "HTTP Request3"
+    },
+    {
+      "parameters": {
+        "tableId": "=forum_topics",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "=topic_id",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.topic_id }}"
+            },
+            {
+              "fieldId": "=url",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.url }}"
+            },
+            {
+              "fieldId": "=title",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.title }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1056,
+        -16
+      ],
+      "id": "3c441d2a-6196-4a07-b85e-5216acb35b28",
+      "name": "Create a row3",
+      "credentials": {
+        "supabaseApi": {
+          "id": "6aDk82Qa48hY3PM1",
+          "name": "Supabase account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Get a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a row": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Create a row3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Create a row1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a row1": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Create a row2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request3": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a row3": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "c3070126-e127-4280-83a9-0af51341b93d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d8518d2d38915c09cef81ae6e02a228c86078f5aaa1a8c2764300549cc107ba4"
+  },
+  "id": "B6DwEwMwnc2goajC",
+  "tags": []
+}
